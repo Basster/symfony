@@ -15,6 +15,8 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\VarDumper\Cloner\VarCloner;
 use Symfony\Component\VarDumper\Dumper\CliDumper;
 use Symfony\Component\VarDumper\Test\VarDumperTestTrait;
+use Twig\Environment;
+use Twig\Loader\FilesystemLoader;
 
 /**
  * @author Nicolas Grekas <p@tchwork.com>
@@ -46,7 +48,6 @@ class CliDumperTest extends TestCase
         $intMax = PHP_INT_MAX;
         $res = (int) $var['res'];
 
-        $r = defined('HHVM_VERSION') ? '' : '#%d';
         $this->assertStringMatchesFormat(
             <<<EOTXT
 array:24 [
@@ -74,9 +75,9 @@ array:24 [
     +foo: "foo"
     +"bar": "bar"
   }
-  "closure" => Closure {{$r}
+  "closure" => Closure {#%d
     class: "Symfony\Component\VarDumper\Tests\Dumper\CliDumperTest"
-    this: Symfony\Component\VarDumper\Tests\Dumper\CliDumperTest {{$r} …}
+    this: Symfony\Component\VarDumper\Tests\Dumper\CliDumperTest {#%d …}
     parameters: {
       \$a: {}
       &\$b: {
@@ -231,10 +232,6 @@ EOTXT
 
     public function testClosedResource()
     {
-        if (defined('HHVM_VERSION') && HHVM_VERSION_ID < 30600) {
-            $this->markTestSkipped();
-        }
-
         $var = fopen(__FILE__, 'r');
         fclose($var);
 
@@ -291,14 +288,14 @@ EOTXT
     }
 
     /**
-     * @requires function Twig_Template::getSourceContext
+     * @requires function Twig\Template::getSourceContext
      */
     public function testThrowingCaster()
     {
         $out = fopen('php://memory', 'r+b');
 
         require_once __DIR__.'/../Fixtures/Twig.php';
-        $twig = new \__TwigTemplate_VarDumperFixture_u75a09(new \Twig_Environment(new \Twig_Loader_Filesystem()));
+        $twig = new \__TwigTemplate_VarDumperFixture_u75a09(new Environment(new FilesystemLoader()));
 
         $dumper = new CliDumper();
         $dumper->setColors(false);
@@ -314,23 +311,21 @@ EOTXT
             ':stream' => eval('return function () use ($twig) {
                 try {
                     $twig->render(array());
-                } catch (\Twig_Error_Runtime $e) {
+                } catch (\Twig\Error\RuntimeError $e) {
                     throw $e->getPrevious();
                 }
             };'),
         ));
-        $line = __LINE__ - 2;
         $ref = (int) $out;
 
         $data = $cloner->cloneVar($out);
         $dumper->dump($data, $out);
         $out = stream_get_contents($out, -1, 0);
 
-        $r = defined('HHVM_VERSION') ? '' : '#%d';
         $this->assertStringMatchesFormat(
             <<<EOTXT
 stream resource {@{$ref}
-  ⚠: Symfony\Component\VarDumper\Exception\ThrowingCasterException {{$r}
+  ⚠: Symfony\Component\VarDumper\Exception\ThrowingCasterException {#%d
     #message: "Unexpected Exception thrown from a caster: Foobar"
     trace: {
       %sTwig.php:2: {
@@ -341,7 +336,7 @@ stream resource {@{$ref}
       %sTemplate.php:%d: {
         : try {
         :     \$this->doDisplay(\$context, \$blocks);
-        : } catch (Twig_Error \$e) {
+        : } catch (Twig%sError \$e) {
       }
       %sTemplate.php:%d: {
         : {
@@ -353,7 +348,7 @@ stream resource {@{$ref}
         :     \$this->display(\$context);
         : } catch (%s \$e) {
       }
-      %sCliDumperTest.php:{$line}: {
+      %sCliDumperTest.php:%d: {
 %A
       }
     }
@@ -385,10 +380,9 @@ EOTXT
         $data = $cloner->cloneVar($var);
         $out = $dumper->dump($data, true);
 
-        $r = defined('HHVM_VERSION') ? '' : '#%d';
         $this->assertStringMatchesFormat(
             <<<EOTXT
-{{$r}
+{#%d
   +"foo": &1 "foo"
   +"bar": &1 "foo"
 }
@@ -402,7 +396,6 @@ EOTXT
     /**
      * @runInSeparateProcess
      * @preserveGlobalState disabled
-     * @requires PHP 5.6
      */
     public function testSpecialVars56()
     {
@@ -433,7 +426,7 @@ EOTXT
      * @runInSeparateProcess
      * @preserveGlobalState disabled
      */
-    public function testGlobalsNoExt()
+    public function testGlobals()
     {
         $var = $this->getSpecialVars();
         unset($var[0]);
@@ -447,10 +440,6 @@ EOTXT
         $dumper->setColors(false);
         $cloner = new VarCloner();
 
-        $refl = new \ReflectionProperty($cloner, 'useExt');
-        $refl->setAccessible(true);
-        $refl->setValue($cloner, false);
-
         $data = $cloner->cloneVar($var);
         $dumper->dump($data);
 
@@ -463,47 +452,6 @@ array:2 [
     ]
   ]
   2 => &1 array:1 [&1]
-]
-
-EOTXT
-            ,
-            $out
-        );
-    }
-
-    /**
-     * @runInSeparateProcess
-     * @preserveGlobalState disabled
-     */
-    public function testBuggyRefs()
-    {
-        if (PHP_VERSION_ID >= 50600) {
-            $this->markTestSkipped('PHP 5.6 fixed refs counting');
-        }
-
-        $var = $this->getSpecialVars();
-        $var = $var[0];
-
-        $dumper = new CliDumper();
-        $dumper->setColors(false);
-        $cloner = new VarCloner();
-
-        $data = $cloner->cloneVar($var)->withMaxDepth(3);
-        $out = '';
-        $dumper->dump($data, function ($line, $depth) use (&$out) {
-            if ($depth >= 0) {
-                $out .= str_repeat('  ', $depth).$line."\n";
-            }
-        });
-
-        $this->assertSame(
-            <<<'EOTXT'
-array:1 [
-  0 => array:1 [
-    0 => array:1 [
-      0 => array:1 [ …1]
-    ]
-  ]
 ]
 
 EOTXT

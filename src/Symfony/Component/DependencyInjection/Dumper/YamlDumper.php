@@ -15,7 +15,6 @@ use Symfony\Component\Yaml\Dumper as YmlDumper;
 use Symfony\Component\Yaml\Tag\TaggedValue;
 use Symfony\Component\DependencyInjection\Alias;
 use Symfony\Component\DependencyInjection\Argument\ArgumentInterface;
-use Symfony\Component\DependencyInjection\Argument\ClosureProxyArgument;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\Argument\ServiceClosureArgument;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -107,14 +106,6 @@ class YamlDumper extends Dumper
 
         if ($definition->isAutowired()) {
             $code .= "        autowire: true\n";
-        }
-
-        $autowiringTypesCode = '';
-        foreach ($definition->getAutowiringTypes(false) as $autowiringType) {
-            $autowiringTypesCode .= sprintf("            - %s\n", $this->dumper->dump($autowiringType));
-        }
-        if ($autowiringTypesCode) {
-            $code .= sprintf("        autowiring_types:\n%s", $autowiringTypesCode);
         }
 
         if ($definition->isLazy()) {
@@ -256,8 +247,6 @@ class YamlDumper extends Dumper
         if ($value instanceof ArgumentInterface) {
             if ($value instanceof IteratorArgument) {
                 $tag = 'iterator';
-            } elseif ($value instanceof ClosureProxyArgument) {
-                $tag = 'closure_proxy';
             } else {
                 throw new RuntimeException(sprintf('Unspecified Yaml tag for type "%s".', get_class($value)));
             }

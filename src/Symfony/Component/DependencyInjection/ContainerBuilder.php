@@ -12,7 +12,6 @@
 namespace Symfony\Component\DependencyInjection;
 
 use Psr\Container\ContainerInterface as PsrContainerInterface;
-use Symfony\Component\DependencyInjection\Argument\ClosureProxyArgument;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\Argument\RewindableGenerator;
 use Symfony\Component\DependencyInjection\Argument\ServiceClosureArgument;
@@ -33,12 +32,12 @@ use Symfony\Component\Config\Resource\ComposerResource;
 use Symfony\Component\Config\Resource\DirectoryResource;
 use Symfony\Component\Config\Resource\FileExistenceResource;
 use Symfony\Component\Config\Resource\FileResource;
+use Symfony\Component\Config\Resource\GlobResource;
 use Symfony\Component\Config\Resource\ReflectionClassResource;
 use Symfony\Component\Config\Resource\ResourceInterface;
 use Symfony\Component\DependencyInjection\LazyProxy\Instantiator\InstantiatorInterface;
 use Symfony\Component\DependencyInjection\LazyProxy\Instantiator\RealServiceInstantiator;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
-use Symfony\Component\EventDispatcher\ContainerAwareEventDispatcher;
 use Symfony\Component\ExpressionLanguage\Expression;
 use Symfony\Component\ExpressionLanguage\ExpressionFunctionProviderInterface;
 
@@ -249,6 +248,10 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
             return $this;
         }
 
+        if ($resource instanceof GlobResource && $this->inVendors($resource->getPrefix())) {
+            return $this;
+        }
+
         $this->resources[(string) $resource] = $resource;
 
         return $this;
@@ -333,13 +336,12 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
      * Retrieves the requested reflection class and registers it for resource tracking.
      *
      * @param string $class
-     * @param bool   $koWithThrowingAutoloader Whether autoload should be protected against bad parents or not
      *
      * @return \ReflectionClass|null
      *
      * @final
      */
-    public function getReflectionClass($class, $koWithThrowingAutoloader = false)
+    public function getReflectionClass($class)
     {
         if (!$class = $this->getParameterBag()->resolveValue($class)) {
             return;
@@ -349,12 +351,9 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
         try {
             if (isset($this->classReflectors[$class])) {
                 $classReflector = $this->classReflectors[$class];
-            } elseif ($koWithThrowingAutoloader) {
-                $resource = new ClassExistenceResource($class, ClassExistenceResource::EXISTS_KO_WITH_THROWING_AUTOLOADER);
-
-                $classReflector = $resource->isFresh(0) ? false : new \ReflectionClass($class);
             } else {
-                $classReflector = new \ReflectionClass($class);
+                $resource = new ClassExistenceResource($class, false);
+                $classReflector = $resource->isFresh(0) ? false : new \ReflectionClass($class);
             }
         } catch (\ReflectionException $e) {
             $classReflector = false;
@@ -362,7 +361,7 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
 
         if ($this->trackResources) {
             if (!$classReflector) {
-                $this->addResource($resource ?: new ClassExistenceResource($class, ClassExistenceResource::EXISTS_KO));
+                $this->addResource($resource ?: new ClassExistenceResource($class, false));
             } elseif (!$classReflector->isInternal()) {
                 $path = $classReflector->getFileName();
 
@@ -443,7 +442,7 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
      *
      * @return $this
      */
-    public function addCompilerPass(CompilerPassInterface $pass, $type = PassConfig::TYPE_BEFORE_OPTIMIZATION/*, $priority = 0*/)
+    public function addCompilerPass(CompilerPassInterface $pass, $type = PassConfig::TYPE_BEFORE_OPTIMIZATION/*, int $priority = 0*/)
     {
         if (func_num_args() >= 3) {
             $priority = func_get_arg(2);
@@ -451,7 +450,7 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
             if (__CLASS__ !== get_class($this)) {
                 $r = new \ReflectionMethod($this, __FUNCTION__);
                 if (__CLASS__ !== $r->getDeclaringClass()->getName()) {
-                    @trigger_error(sprintf('Method %s() will have a third `$priority = 0` argument in version 4.0. Not defining it is deprecated since 3.2.', __METHOD__), E_USER_DEPRECATED);
+                    @trigger_error(sprintf('Method %s() will have a third `int $priority = 0` argument in version 4.0. Not defining it is deprecated since 3.2.', __METHOD__), E_USER_DEPRECATED);
                 }
             }
 
@@ -731,9 +730,6 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
         $compiler->compile($this);
 
         foreach ($this->definitions as $id => $definition) {
-            if (!$definition->isPublic()) {
-                $this->privates[$id] = true;
-            }
             if ($this->trackResources && $definition->isLazy()) {
                 $this->getReflectionClass($definition->getClass());
             }
@@ -1071,11 +1067,8 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
             $r = new \ReflectionClass($class = $parameterBag->resolveValue($definition->getClass()));
 
             $service = null === $r->getConstructor() ? $r->newInstance() : $r->newInstanceArgs($arguments);
-            // don't trigger deprecations for internal uses
-            // @deprecated since version 3.3, to be removed in 4.0 along with the deprecated class
-            $deprecationWhitelist = array('event_dispatcher' => ContainerAwareEventDispatcher::class);
 
-            if (!$definition->isDeprecated() && 0 < strpos($r->getDocComment(), "\n * @deprecated ") && (!isset($deprecationWhitelist[$id]) || $deprecationWhitelist[$id] !== $class)) {
+            if (!$definition->isDeprecated() && 0 < strpos($r->getDocComment(), "\n * @deprecated ")) {
                 @trigger_error(sprintf('The "%s" service relies on the deprecated "%s" class. It should either be deprecated or its implementation upgraded.', $id, $r->name), E_USER_DEPRECATED);
             }
         }
@@ -1159,31 +1152,6 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
 
                 return $count;
             });
-        } elseif ($value instanceof ClosureProxyArgument) {
-            $parameterBag = $this->getParameterBag();
-            list($reference, $method) = $value->getValues();
-            if ('service_container' === $id = (string) $reference) {
-                $class = parent::class;
-            } elseif (!$this->hasDefinition($id) && ContainerInterface::EXCEPTION_ON_INVALID_REFERENCE !== $reference->getInvalidBehavior()) {
-                return;
-            } else {
-                $class = $parameterBag->resolveValue($this->findDefinition($id)->getClass());
-            }
-            if (!method_exists($class, $method = $parameterBag->resolveValue($method))) {
-                throw new InvalidArgumentException(sprintf('Cannot create closure-proxy for service "%s": method "%s::%s" does not exist.', $id, $class, $method));
-            }
-            $r = new \ReflectionMethod($class, $method);
-            if (!$r->isPublic()) {
-                throw new RuntimeException(sprintf('Cannot create closure-proxy for service "%s": method "%s::%s" must be public.', $id, $class, $method));
-            }
-            foreach ($r->getParameters() as $p) {
-                if ($p->isPassedByReference()) {
-                    throw new RuntimeException(sprintf('Cannot create closure-proxy for service "%s": parameter "$%s" of method "%s::%s" must not be passed by reference.', $id, $p->name, $class, $method));
-                }
-            }
-            $value = function () use ($id, $method) {
-                return call_user_func_array(array($this->get($id), $method), func_get_args());
-            };
         } elseif ($value instanceof Reference) {
             $value = $this->get((string) $value, $value->getInvalidBehavior());
         } elseif ($value instanceof Definition) {

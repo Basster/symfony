@@ -1,10 +1,15 @@
 CHANGELOG
 =========
 
+4.0.0
+-----
+
+ * removed the `ContainerAwareEventDispatcher` class
+
 3.3.0
 -----
 
-  * The ContainerAwareEventDispatcher class has been deprecated. Use EventDispatcher with closure-proxy injection instead.
+  * The ContainerAwareEventDispatcher class has been deprecated. Use EventDispatcher with closure factories instead.
 
 3.0.0
 -----

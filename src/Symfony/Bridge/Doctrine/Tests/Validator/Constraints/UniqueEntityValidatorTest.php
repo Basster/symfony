@@ -31,15 +31,13 @@ use Symfony\Bridge\Doctrine\Tests\Fixtures\SingleIntIdStringWrapperNameEntity;
 use Symfony\Bridge\Doctrine\Tests\Fixtures\Type\StringWrapper;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntityValidator;
-use Symfony\Component\Validator\Tests\Constraints\AbstractConstraintValidatorTest;
+use Symfony\Component\Validator\Test\ConstraintValidatorTestCase;
 use Doctrine\ORM\Tools\SchemaTool;
 
 /**
  * @author Bernhard Schussek <bschussek@gmail.com>
- *
- * @todo use ConstraintValidatorTestCase when symfony/validator ~3.2 is required.
  */
-class UniqueEntityValidatorTest extends AbstractConstraintValidatorTest
+class UniqueEntityValidatorTest extends ConstraintValidatorTestCase
 {
     const EM_NAME = 'foo';
 
@@ -105,8 +103,8 @@ class UniqueEntityValidatorTest extends AbstractConstraintValidatorTest
             ->getMock()
         ;
         $em->expects($this->any())
-             ->method('getRepository')
-             ->will($this->returnValue($repositoryMock))
+            ->method('getRepository')
+            ->will($this->returnValue($repositoryMock))
         ;
 
         $classMetadata = $this->getMockBuilder('Doctrine\Common\Persistence\Mapping\ClassMetadata')->getMock();
@@ -131,8 +129,8 @@ class UniqueEntityValidatorTest extends AbstractConstraintValidatorTest
         ;
         $classMetadata->reflFields = array('name' => $refl);
         $em->expects($this->any())
-             ->method('getClassMetadata')
-             ->will($this->returnValue($classMetadata))
+            ->method('getClassMetadata')
+            ->will($this->returnValue($classMetadata))
         ;
 
         return $em;
@@ -363,8 +361,8 @@ class UniqueEntityValidatorTest extends AbstractConstraintValidatorTest
 
         $repository = $this->createRepositoryMock();
         $repository->expects($this->once())
-             ->method('findByCustom')
-             ->will($this->returnValue(array()))
+            ->method('findByCustom')
+            ->will($this->returnValue(array()))
         ;
         $this->em = $this->createEntityManagerMock($repository);
         $this->registry = $this->createRegistryMock($this->em);

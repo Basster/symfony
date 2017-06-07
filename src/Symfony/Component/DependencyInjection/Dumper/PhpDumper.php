@@ -12,7 +12,6 @@
 namespace Symfony\Component\DependencyInjection\Dumper;
 
 use Symfony\Component\DependencyInjection\Argument\ArgumentInterface;
-use Symfony\Component\DependencyInjection\Argument\ClosureProxyArgument;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\Argument\ServiceClosureArgument;
 use Symfony\Component\DependencyInjection\Variable;
@@ -25,9 +24,9 @@ use Symfony\Component\DependencyInjection\TypedReference;
 use Symfony\Component\DependencyInjection\Parameter;
 use Symfony\Component\DependencyInjection\Exception\EnvParameterException;
 use Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
+use Symfony\Component\DependencyInjection\Exception\LogicException;
 use Symfony\Component\DependencyInjection\Exception\RuntimeException;
 use Symfony\Component\DependencyInjection\Exception\ServiceCircularReferenceException;
-use Symfony\Component\DependencyInjection\LazyProxy\ProxyHelper;
 use Symfony\Component\DependencyInjection\LazyProxy\PhpDumper\DumperInterface as ProxyDumper;
 use Symfony\Component\DependencyInjection\LazyProxy\PhpDumper\NullDumper;
 use Symfony\Component\DependencyInjection\ExpressionLanguage;
@@ -67,7 +66,6 @@ class PhpDumper extends Dumper
     private $docStar;
     private $serviceIdToMethodNameMap;
     private $usedMethodNames;
-    private $baseClass;
 
     /**
      * @var \Symfony\Component\DependencyInjection\LazyProxy\PhpDumper\DumperInterface
@@ -80,7 +78,7 @@ class PhpDumper extends Dumper
     public function __construct(ContainerBuilder $container)
     {
         if (!$container->isCompiled()) {
-            @trigger_error('Dumping an uncompiled ContainerBuilder is deprecated since version 3.3 and will not be supported anymore in 4.0. Compile the container beforehand.', E_USER_DEPRECATED);
+            throw new LogicException('Cannot dump an uncompiled container.');
         }
 
         parent::__construct($container);
@@ -125,7 +123,6 @@ class PhpDumper extends Dumper
 
         $this->classResources = array();
         $this->initializeMethodNamesMap($options['base_class']);
-        $this->baseClass = $options['base_class'];
 
         $this->docStar = $options['debug'] ? '*' : '';
 
@@ -154,17 +151,11 @@ class PhpDumper extends Dumper
             }
         }
 
-        $code = $this->startClass($options['class'], $options['base_class'], $options['namespace']);
-
-        if ($this->container->isCompiled()) {
-            $code .= $this->addFrozenConstructor();
-            $code .= $this->addFrozenCompile();
-            $code .= $this->addFrozenIsCompiled();
-        } else {
-            $code .= $this->addConstructor();
-        }
-
-        $code .=
+        $code =
+            $this->startClass($options['class'], $options['base_class'], $options['namespace']).
+            $this->addConstructor().
+            $this->addCompile().
+            $this->addIsCompiled().
             $this->addServices().
             $this->addDefaultParametersMethod().
             $this->endClass().
@@ -179,7 +170,7 @@ class PhpDumper extends Dumper
             }
         }
         if ($unusedEnvs) {
-            throw new EnvParameterException($unusedEnvs);
+            throw new EnvParameterException($unusedEnvs, null, 'Environment variables "%s" are never used. Please, check your container\'s configuration.');
         }
 
         return $code;
@@ -783,8 +774,7 @@ EOF;
      */
     private function startClass($class, $baseClass, $namespace)
     {
-        $bagClass = $this->container->isCompiled() ? 'use Symfony\Component\DependencyInjection\ParameterBag\FrozenParameterBag;' : 'use Symfony\Component\DependencyInjection\ParameterBag\\ParameterBag;';
-        $namespaceLine = $namespace ? "namespace $namespace;\n" : '';
+        $namespaceLine = $namespace ? "\nnamespace $namespace;\n" : '';
 
         return <<<EOF
 <?php
@@ -795,7 +785,7 @@ use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
 use Symfony\Component\DependencyInjection\Exception\LogicException;
 use Symfony\Component\DependencyInjection\Exception\RuntimeException;
-$bagClass
+use Symfony\Component\DependencyInjection\ParameterBag\FrozenParameterBag;
 
 /*{$this->docStar}
  * $class.
@@ -814,45 +804,11 @@ EOF;
     }
 
     /**
-     * Adds the constructor.
-     *
-     * @return string
-     */
-    private function addConstructor()
-    {
-        $targetDirs = $this->exportTargetDirs();
-        $arguments = $this->container->getParameterBag()->all() ? 'new ParameterBag($this->getDefaultParameters())' : null;
-
-        $code = <<<EOF
-
-    /*{$this->docStar}
-     * Constructor.
-     */
-    public function __construct()
-    {{$targetDirs}
-        parent::__construct($arguments);
-
-EOF;
-
-        $code .= $this->addNormalizedIds();
-        $code .= $this->addMethodMap();
-        $code .= $this->addPrivateServices();
-        $code .= $this->addAliases();
-
-        $code .= <<<'EOF'
-    }
-
-EOF;
-
-        return $code;
-    }
-
-    /**
      * Adds the constructor for a compiled container.
      *
      * @return string
      */
-    private function addFrozenConstructor()
+    private function addConstructor()
     {
         $targetDirs = $this->exportTargetDirs();
 
@@ -888,7 +844,7 @@ EOF;
      *
      * @return string
      */
-    private function addFrozenCompile()
+    private function addCompile()
     {
         return <<<EOF
 
@@ -908,7 +864,7 @@ EOF;
      *
      * @return string
      */
-    private function addFrozenIsCompiled()
+    private function addIsCompiled()
     {
         return <<<EOF
 
@@ -917,16 +873,6 @@ EOF;
      */
     public function isCompiled()
     {
-        return true;
-    }
-
-    /*{$this->docStar}
-     * {@inheritdoc}
-     */
-    public function isFrozen()
-    {
-        @trigger_error(sprintf('The %s() method is deprecated since version 3.3 and will be removed in 4.0. Use the isCompiled() method instead.', __METHOD__), E_USER_DEPRECATED);
-
         return true;
     }
 
@@ -1011,7 +957,7 @@ EOF;
     private function addAliases()
     {
         if (!$aliases = $this->container->getAliases()) {
-            return $this->container->isCompiled() ? "\n        \$this->aliases = array();\n" : '';
+            return "\n        \$this->aliases = array();\n";
         }
 
         $code = "        \$this->aliases = array(\n";
@@ -1056,9 +1002,7 @@ EOF;
         }
         $parameters = sprintf("array(\n%s\n%s)", implode("\n", $php), str_repeat(' ', 8));
 
-        $code = '';
-        if ($this->container->isCompiled()) {
-            $code .= <<<'EOF'
+        $code = <<<'EOF'
 
     /**
      * {@inheritdoc}
@@ -1112,13 +1056,13 @@ EOF;
     }
 
 EOF;
-            if ('' === $this->docStar) {
-                $code = str_replace('/**', '/*', $code);
-            }
+        if ('' === $this->docStar) {
+            $code = str_replace('/**', '/*', $code);
+        }
 
-            if ($dynamicPhp) {
-                $loadedDynamicParameters = $this->exportParameters(array_combine(array_keys($dynamicPhp), array_fill(0, count($dynamicPhp), false)), '', 8);
-                $getDynamicParameter = <<<'EOF'
+        if ($dynamicPhp) {
+            $loadedDynamicParameters = $this->exportParameters(array_combine(array_keys($dynamicPhp), array_fill(0, count($dynamicPhp), false)), '', 8);
+            $getDynamicParameter = <<<'EOF'
         switch ($name) {
 %s
             default: throw new InvalidArgumentException(sprintf('The dynamic parameter "%%s" must be defined.', $name));
@@ -1127,13 +1071,13 @@ EOF;
 
         return $this->dynamicParameters[$name] = $value;
 EOF;
-                $getDynamicParameter = sprintf($getDynamicParameter, implode("\n", $dynamicPhp));
-            } else {
-                $loadedDynamicParameters = 'array()';
-                $getDynamicParameter = str_repeat(' ', 8).'throw new InvalidArgumentException(sprintf(\'The dynamic parameter "%s" must be defined.\', $name));';
-            }
+            $getDynamicParameter = sprintf($getDynamicParameter, implode("\n", $dynamicPhp));
+        } else {
+            $loadedDynamicParameters = 'array()';
+            $getDynamicParameter = str_repeat(' ', 8).'throw new InvalidArgumentException(sprintf(\'The dynamic parameter "%s" must be defined.\', $name));';
+        }
 
-            $code .= <<<EOF
+        $code .= <<<EOF
 
     private \$loadedDynamicParameters = {$loadedDynamicParameters};
     private \$dynamicParameters = array();
@@ -1151,13 +1095,6 @@ EOF;
     {
 {$getDynamicParameter}
     }
-
-EOF;
-        } elseif ($dynamicPhp) {
-            throw new RuntimeException('You cannot dump a not-frozen container with dynamic parameters.');
-        }
-
-        $code .= <<<EOF
 
     /*{$this->docStar}
      * Gets the default parameters.
@@ -1259,7 +1196,15 @@ EOF;
 
         $conditions = array();
         foreach ($services as $service) {
+            if ($this->container->hasDefinition($service) && !$this->container->getDefinition($service)->isPublic()) {
+                continue;
+            }
+
             $conditions[] = sprintf("\$this->has('%s')", $service);
+        }
+
+        if (!$conditions) {
+            return '';
         }
 
         return implode(' && ', $conditions);
@@ -1419,66 +1364,44 @@ EOF;
                     $value = $value->getValues()[0];
                     $code = $this->dumpValue($value, $interpolate);
 
+                    $returnedType = '';
                     if ($value instanceof TypedReference) {
-                        $code = sprintf('$f = function (\\%s $v%s) { return $v; }; return $f(%s);', $value->getType(), ContainerInterface::EXCEPTION_ON_INVALID_REFERENCE !== $value->getInvalidBehavior() ? ' = null' : '', $code);
-                    } else {
-                        $code = sprintf('return %s;', $code);
+                        $returnedType = sprintf(': %s\%s', ContainerInterface::EXCEPTION_ON_INVALID_REFERENCE === $value->getInvalidBehavior() ? '' : '?', $value->getType());
                     }
 
-                    return sprintf("function () {\n            %s\n        }", $code);
+                    $code = sprintf('return %s;', $code);
+
+                    return sprintf("function ()%s {\n            %s\n        }", $returnedType, $code);
                 }
 
                 if ($value instanceof IteratorArgument) {
-                    $countCode = array();
-                    $countCode[] = 'function () {';
                     $operands = array(0);
-
                     $code = array();
                     $code[] = 'new RewindableGenerator(function () {';
-                    foreach ($value->getValues() as $k => $v) {
-                        ($c = $this->getServiceConditionals($v)) ? $operands[] = "(int) ($c)" : ++$operands[0];
-                        $v = $this->wrapServiceConditionals($v, sprintf("        yield %s => %s;\n", $this->dumpValue($k, $interpolate), $this->dumpValue($v, $interpolate)));
-                        foreach (explode("\n", $v) as $v) {
-                            if ($v) {
-                                $code[] = '    '.$v;
+
+                    if (!$values = $value->getValues()) {
+                        $code[] = '            return new \EmptyIterator();';
+                    } else {
+                        $countCode = array();
+                        $countCode[] = 'function () {';
+
+                        foreach ($values as $k => $v) {
+                            ($c = $this->getServiceConditionals($v)) ? $operands[] = "(int) ($c)" : ++$operands[0];
+                            $v = $this->wrapServiceConditionals($v, sprintf("        yield %s => %s;\n", $this->dumpValue($k, $interpolate), $this->dumpValue($v, $interpolate)));
+                            foreach (explode("\n", $v) as $v) {
+                                if ($v) {
+                                    $code[] = '    '.$v;
+                                }
                             }
                         }
-                    }
 
-                    $countCode[] = sprintf('            return %s;', implode(' + ', $operands));
-                    $countCode[] = '        }';
+                        $countCode[] = sprintf('            return %s;', implode(' + ', $operands));
+                        $countCode[] = '        }';
+                    }
 
                     $code[] = sprintf('        }, %s)', count($operands) > 1 ? implode("\n", $countCode) : $operands[0]);
 
                     return implode("\n", $code);
-                }
-
-                if ($value instanceof ClosureProxyArgument) {
-                    list($reference, $method) = $value->getValues();
-                    $method = substr($this->dumpLiteralClass($this->dumpValue($method)), 1);
-
-                    if ('service_container' === (string) $reference) {
-                        $class = $this->baseClass;
-                    } elseif (!$this->container->hasDefinition((string) $reference) && ContainerInterface::EXCEPTION_ON_INVALID_REFERENCE !== $reference->getInvalidBehavior()) {
-                        return 'null';
-                    } else {
-                        $class = substr($this->dumpLiteralClass($this->dumpValue($this->container->findDefinition((string) $reference)->getClass())), 1);
-                    }
-                    if (false !== strpos($class, '$') || false !== strpos($method, '$')) {
-                        throw new RuntimeException(sprintf('Cannot dump definition for service "%s": dynamic class names or methods, and closure-proxies are incompatible with each other.', $reference));
-                    }
-                    if (!method_exists($class, $method)) {
-                        throw new InvalidArgumentException(sprintf('Cannot create closure-proxy for service "%s": method "%s::%s" does not exist.', $reference, $class, $method));
-                    }
-                    $r = $this->container->getReflectionClass($class)->getMethod($method);
-                    if (!$r->isPublic()) {
-                        throw new InvalidArgumentException(sprintf('Cannot create closure-proxy for service "%s": method "%s::%s" must be public.', $reference, $class, $method));
-                    }
-                    $signature = preg_replace('/^(&?)[^(]*/', '$1', ProxyHelper::getSignature($r, $call));
-
-                    $return = 'void' !== ProxyHelper::getTypeHint($r);
-
-                    return sprintf("/** @closure-proxy %s::%s */ function %s {\n            %s%s->%s;\n        }", $class, $method, $signature, $return ? 'return ' : '', $this->dumpValue($reference), $call);
                 }
             } finally {
                 list($this->definitionVariables, $this->referenceVariables, $this->variableCount) = $scope;
@@ -1599,7 +1522,7 @@ EOF;
      */
     private function dumpParameter($name)
     {
-        if ($this->container->isCompiled() && $this->container->hasParameter($name)) {
+        if ($this->container->hasParameter($name)) {
             return $this->dumpValue($this->container->getParameter($name), false);
         }
 
@@ -1633,9 +1556,7 @@ EOF;
         }
 
         if ($this->container->hasDefinition($id) && (!$this->container->getDefinition($id)->isPublic() || $this->container->getDefinition($id)->isShared())) {
-            // The following is PHP 5.5 syntax for what could be written as "(\$this->services['$id'] ?? $code)" on PHP>=7.0
-
-            $code = "\${(\$_ = isset(\$this->services['$id']) ? \$this->services['$id'] : $code) && false ?: '_'}";
+            $code = "(\$this->services['$id'] ?? $code)";
         }
 
         return $code;

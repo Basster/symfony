@@ -13,6 +13,7 @@ namespace Symfony\Bundle\WebServerBundle\Command;
 
 use Symfony\Bundle\WebServerBundle\WebServer;
 use Symfony\Bundle\WebServerBundle\WebServerConfig;
+use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -25,7 +26,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *
  * @author Christian Flothmann <christian.flothmann@xabbuh.de>
  */
-class ServerStartCommand extends ServerCommand
+class ServerStartCommand extends Command
 {
     private $documentRoot;
     private $environment;
@@ -53,9 +54,14 @@ class ServerStartCommand extends ServerCommand
             ))
             ->setDescription('Starts a local web server in the background')
             ->setHelp(<<<'EOF'
-The <info>%command.name%</info> runs a local web server:
+<info>%command.name%</info> runs a local web server: By default, the server
+listens on <comment>127.0.0.1</> address and the port number is automatically selected
+as the first free port starting from <comment>8000</>:
 
   <info>php %command.full_name%</info>
+
+The server is run in the background and you can keep executing other commands.
+Execute <comment>server:stop</> to stop it.
 
 Change the default address and port by passing them as an argument:
 

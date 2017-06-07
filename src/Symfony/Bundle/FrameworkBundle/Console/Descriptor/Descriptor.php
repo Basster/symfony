@@ -258,10 +258,6 @@ abstract class Descriptor implements DescriptorInterface
             return $builder->getAlias($serviceId);
         }
 
-        if ('service_container' === $serviceId) {
-            return $builder;
-        }
-
         // the service has been injected in some special way, just return the service
         return $builder->get($serviceId);
     }
@@ -310,16 +306,5 @@ abstract class Descriptor implements DescriptorInterface
         asort($serviceIds);
 
         return $serviceIds;
-    }
-
-    protected function formatClosure(\Closure $closure)
-    {
-        $r = new \ReflectionFunction($closure);
-
-        if (preg_match('#^/\*\* @closure-proxy ([^: ]++)::([^: ]++) \*/$#', $r->getDocComment(), $m)) {
-            return sprintf('%s::%s', $m[1], $m[2]);
-        }
-
-        return 'closure';
     }
 }

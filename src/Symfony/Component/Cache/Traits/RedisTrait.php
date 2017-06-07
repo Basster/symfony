@@ -90,6 +90,11 @@ trait RedisTrait
             $params['dbindex'] = $m[1];
             $params['path'] = substr($params['path'], 0, -strlen($m[0]));
         }
+        if (isset($params['host'])) {
+            $scheme = 'tcp';
+        } else {
+            $scheme = 'unix';
+        }
         $params += array(
             'host' => isset($params['host']) ? $params['host'] : $params['path'],
             'port' => isset($params['host']) ? 6379 : null,
@@ -120,7 +125,7 @@ trait RedisTrait
                 throw new InvalidArgumentException(sprintf('Redis connection failed (%s): %s', $e, $dsn));
             }
         } elseif (is_a($class, \Predis\Client::class, true)) {
-            $params['scheme'] = isset($params['host']) ? 'tcp' : 'unix';
+            $params['scheme'] = $scheme;
             $params['database'] = $params['dbindex'] ?: null;
             $params['password'] = $auth;
             $redis = new $class((new Factory())->create($params));
@@ -302,6 +307,14 @@ trait RedisTrait
             }
             foreach ($results as $k => list($h, $c)) {
                 $results[$k] = $connections[$h][$c];
+            }
+        } elseif ($this->redis instanceof \RedisCluster) {
+            // phpredis doesn't support pipelining with RedisCluster
+            // see https://github.com/phpredis/phpredis/blob/develop/cluster.markdown#pipelining
+            $results = array();
+            foreach ($generator() as $command => $args) {
+                $results[] = call_user_func_array(array($this->redis, $command), $args);
+                $ids[] = $args[0];
             }
         } else {
             $this->redis->multi(\Redis::PIPELINE);
