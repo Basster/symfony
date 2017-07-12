@@ -49,10 +49,10 @@ abstract class ManagerRegistry extends AbstractManagerRegistry implements Contai
         }
         $manager->setProxyInitializer(\Closure::bind(
             function (&$wrappedInstance, LazyLoadingInterface $manager) use ($name) {
-                if (isset($this->aliases[$name = strtolower($name)])) {
+                if (isset($this->aliases[$name])) {
                     $name = $this->aliases[$name];
                 }
-                $method = !isset($this->methodMap[$name]) ? 'get'.strtr($name, $this->underscoreMap).'Service' : $this->methodMap[$name];
+                $method = $this->methodMap[$name] ?? 'get'.$name.'Service';
                 $wrappedInstance = $this->{$method}(false);
 
                 $manager->setProxyInitializer(null);

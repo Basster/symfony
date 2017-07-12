@@ -17,6 +17,26 @@ CHANGELOG
  * Removed `ConstraintValidatorFactory`
  * Removed class parameters related to routing
  * Removed absolute template paths support in the template name parser
+ * Removed support of the `KERNEL_DIR` environment variable with `KernelTestCase::getKernelClass()`.
+ * Removed the `KernelTestCase::getPhpUnitXmlDir()` and `KernelTestCase::getPhpUnitCliConfigArgument()` methods.
+
+3.4.0
+-----
+
+ * Removed `doctrine/cache` from the list of required dependencies in `composer.json`
+ * Deprecated `validator.mapping.cache.doctrine.apc` service
+ * The `symfony/stopwatch` dependency has been removed, require it via `composer
+   require symfony/stopwatch` in your `dev` environment.
+ * Deprecated using the `KERNEL_DIR` environment variable with `KernelTestCase::getKernelClass()`.
+ * Deprecated the `KernelTestCase::getPhpUnitXmlDir()` and `KernelTestCase::getPhpUnitCliConfigArgument()` methods.
+ * Deprecated `AddCacheClearerPass`, use `Symfony\Component\HttpKernel\DependencyInjection\AddCacheClearerPass` instead.
+ * Deprecated `AddCacheWarmerPass`, use `Symfony\Component\HttpKernel\DependencyInjection\AddCacheWarmerPass` instead.
+ * Deprecated `TranslationDumperPass`, use 
+   `Symfony\Component\Translation\DependencyInjection\TranslationDumperPass` instead
+ * Deprecated `TranslationExtractorPass`, use 
+   `Symfony\Component\Translation\DependencyInjection\TranslationExtractorPass` instead
+ * Deprecated `TranslatorPass`, use 
+   `Symfony\Component\Translation\DependencyInjection\TranslatorPass` instead
 
 3.3.0
 -----
@@ -65,7 +85,7 @@ CHANGELOG
    `Symfony\Component\Validator\DependencyInjection\AddConstraintValidatorsPass` instead
  * Deprecated `ValidateWorkflowsPass`, use
    `Symfony\Component\Workflow\DependencyInjection\ValidateWorkflowsPass` instead
- * Deprecated `ConstraintValidatorFactory`, use 
+ * Deprecated `ConstraintValidatorFactory`, use
    `Symfony\Component\Validator\ContainerConstraintValidatorFactory` instead.
 
 3.2.0
@@ -88,7 +108,8 @@ CHANGELOG
  * Deprecated using core form types without dependencies as services
  * Added `Symfony\Component\HttpHernel\DataCollector\RequestDataCollector::onKernelResponse()`
  * Added `Symfony\Bundle\FrameworkBundle\DataCollector\RequestDataCollector`
- * Deprecated service `serializer.mapping.cache.apc` (use `serializer.mapping.cache.doctrine.apc` instead)
+ * The `framework.serializer.cache` option and the service `serializer.mapping.cache.apc` have been
+   deprecated. APCu should now be automatically used when available.
 
 3.0.0
 -----

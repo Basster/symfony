@@ -991,7 +991,7 @@ EOF;
 
     /**
      * @expectedException \Symfony\Component\Yaml\Exception\ParseException
-     * @expectedExceptionMessage Non-string mapping keys are not supported. Pass the Yaml::PARSE_KEYS_AS_STRINGS flag to cast them to strings
+     * @expectedExceptionMessage Numeric keys are not supported. Pass the Yaml::PARSE_KEYS_AS_STRINGS flag to cast them to strings
      */
     public function testFloatKeys()
     {
@@ -1006,7 +1006,7 @@ EOF;
 
     /**
      * @expectedException \Symfony\Component\Yaml\Exception\ParseException
-     * @expectedExceptionMessage Non-string mapping keys are not supported. Pass the Yaml::PARSE_KEYS_AS_STRINGS flag to cast them to strings
+     * @expectedExceptionMessage Non-string keys are not supported. Pass the Yaml::PARSE_KEYS_AS_STRINGS flag to cast them to strings
      */
     public function testBooleanKeys()
     {
@@ -1542,6 +1542,18 @@ EOF;
     public function taggedValuesProvider()
     {
         return array(
+            'scalars' => array(
+                array(
+                    'foo' => new TaggedValue('inline', 'bar'),
+                    'quz' => new TaggedValue('long', 'this is a long text'),
+                ),
+                <<<YAML
+foo: !inline bar
+quz: !long >
+  this is a long
+  text
+YAML
+            ),
             'sequences' => array(
                 array(new TaggedValue('foo', array('yaml')), new TaggedValue('quz', array('bar'))),
                 <<<YAML
@@ -1569,6 +1581,11 @@ YAML
         );
     }
 
+    public function testNonSpecificTagSupport()
+    {
+        $this->assertSame('12', $this->parser->parse('! 12'));
+    }
+
     /**
      * @expectedException \Symfony\Component\Yaml\Exception\ParseException
      * @expectedExceptionMessage Tags support is not enabled. Enable the `Yaml::PARSE_CUSTOM_TAGS` flag to use "!iterator" at line 1 (near "!iterator [foo]").
@@ -1579,12 +1596,21 @@ YAML
     }
 
     /**
-     * @group legacy
-     * @expectedDeprecation Using the unquoted scalar value "!iterator foo" is deprecated since version 3.3 and will be considered as a tagged value in 4.0. You must quote it.
+     * @expectedException \Symfony\Component\Yaml\Exception\ParseException
+     * @expectedExceptionMessage Tags support is not enabled. Enable the `Yaml::PARSE_CUSTOM_TAGS` flag to use "!iterator" at line 1 (near "!iterator foo").
      */
     public function testUnsupportedTagWithScalar()
     {
-        $this->assertEquals('!iterator foo', $this->parser->parse('!iterator foo'));
+        $this->parser->parse('!iterator foo');
+    }
+
+    /**
+     * @expectedException \Symfony\Component\Yaml\Exception\ParseException
+     * @expectedExceptionMessage The string "!!iterator foo" could not be parsed as it uses an unsupported built-in tag at line 1 (near "!!iterator foo").
+     */
+    public function testUnsupportedBuiltInTagWithScalar()
+    {
+        $this->parser->parse('!!iterator foo');
     }
 
     /**

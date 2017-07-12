@@ -70,6 +70,8 @@ Debug
  * `FlattenException::getTrace()` now returns additional type descriptions
    `integer` and `float`.
 
+ * Support for stacked errors in the `ErrorHandler` has been removed
+
 DependencyInjection
 -------------------
 
@@ -227,6 +229,8 @@ Form
 FrameworkBundle
 ---------------
 
+ * The `validator.mapping.cache.doctrine.apc` service has been removed.
+
  * The `cache:clear` command does not warmup the cache anymore. Warmup should
    be done via the `cache:warmup` command.
 
@@ -330,9 +334,39 @@ FrameworkBundle
  * The `Symfony\Bundle\FrameworkBundle\DependencyInjection\Compiler\ValidateWorkflowsPass` class
    has been removed. Use the `Symfony\Component\Workflow\DependencyInjection\ValidateWorkflowsPass`
    class instead.
+   
+ * Using the `KERNEL_DIR` environment variable and the automatic guessing based
+   on the `phpunit.xml` file location have been removed from the `KernelTestCase::getKernelClass()` 
+   method implementation. Set the `KERNEL_CLASS` environment variable to the
+   fully-qualified class name of your Kernel or override the `KernelTestCase::createKernel()` 
+   or `KernelTestCase::getKernelClass()` method instead.
+   
+ * The methods `KernelTestCase::getPhpUnitXmlDir()` and `KernelTestCase::getPhpUnitCliConfigArgument()`
+   have been removed.
 
  * The `Symfony\Bundle\FrameworkBundle\Validator\ConstraintValidatorFactory` class has been removed.
    Use `Symfony\Component\Validator\ContainerConstraintValidatorFactory` instead.
+
+ * The `--no-prefix` option of the `translation:update` command has
+   been removed.
+
+ * The `Symfony\Bundle\FrameworkBundle\DependencyInjection\Compiler\AddCacheClearerPass` class has been removed. 
+   Use the `Symfony\Component\HttpKernel\DependencyInjection\AddCacheClearerPass` class instead.
+
+ * The `Symfony\Bundle\FrameworkBundle\DependencyInjection\Compiler\AddCacheWarmerPass` class has been removed. 
+   Use the `Symfony\Component\HttpKernel\DependencyInjection\AddCacheWarmerPass` class instead.
+
+ * The `Symfony\Bundle\FrameworkBundle\DependencyInjection\Compiler\TranslationDumperPass`
+   class has been removed. Use the
+   `Symfony\Component\Translation\DependencyInjection\TranslationDumperPass` class instead.
+
+ * The `Symfony\Bundle\FrameworkBundle\DependencyInjection\Compiler\TranslationExtractorPass`
+   class has been removed. Use the
+   `Symfony\Component\Translation\DependencyInjection\TranslationExtractorPass` class instead.
+
+ * The `Symfony\Bundle\FrameworkBundle\DependencyInjection\Compiler\TranslatorPass`
+   class has been removed. Use the
+   `Symfony\Component\Translation\DependencyInjection\TranslatorPass` class instead.
 
 HttpFoundation
 --------------
@@ -406,10 +440,13 @@ HttpKernel
 Ldap
 ----
 
- * The `RenameEntryInterface` has been deprecated, and merged with `EntryManagerInterface`
+ * The `RenameEntryInterface` has been removed, and merged with `EntryManagerInterface`
 
 Process
 -------
+
+ * The `Symfony\Component\Process\ProcessBuilder` class has been removed,
+   use the `Symfony\Component\Process\Process` class directly instead.
 
  * The `ProcessUtils::escapeArgument()` method has been removed, use a command line array or give env vars to the `Process::start/run()` method instead.
 
@@ -421,6 +458,8 @@ Process
 
  * Extending `Process::run()`, `Process::mustRun()` and `Process::restart()` is
    not supported anymore.
+   
+ * The `getEnhanceWindowsCompatibility()` and `setEnhanceWindowsCompatibility()` methods of the `Process` class have been removed.
 
 ProxyManager
 ------------
@@ -437,6 +476,8 @@ Security
 
  * The `AccessDecisionManager::setVoters()` method has been removed. Pass the
    voters to the constructor instead.
+
+ * Support for defining voters that don't implement the `VoterInterface` has been removed.
 
 SecurityBundle
 --------------
@@ -546,9 +587,59 @@ Validator
    }
    ```
 
- * The default value of the strict option of the `Choice` Constraint has been
-   changed to `true` as of 4.0. If you need the previous behaviour ensure to
-   set the option to `false`.
+ * Setting the `checkDNS` option of the `Url` constraint to `true` is dropped
+   in favor of `Url::CHECK_DNS_TYPE_*` constants values.
+
+   Before:
+
+   ```php
+   $constraint = new Url(['checkDNS' => true]);
+   ```
+
+   After:
+
+   ```php
+   $constraint = new Url(['checkDNS' => Url::CHECK_DNS_TYPE_ANY]);
+   ```
+
+VarDumper
+---------
+
+ * The `VarDumperTestTrait::assertDumpEquals()` method expects a 3rd `$context = null`
+   argument and moves `$message = ''` argument at 4th position.
+
+   Before:
+
+   ```php
+   VarDumperTestTrait::assertDumpEquals($dump, $data, $message = '');
+   ```
+
+   After:
+
+   ```php
+   VarDumperTestTrait::assertDumpEquals($dump, $data, $filter = 0, $message = '');
+   ```
+
+ * The `VarDumperTestTrait::assertDumpMatchesFormat()` method expects a 3rd `$context = null`
+   argument and moves `$message = ''` argument at 4th position.
+
+   Before:
+
+   ```php
+   VarDumperTestTrait::assertDumpMatchesFormat($dump, $data, $message = '');
+   ```
+
+   After:
+
+   ```php
+   VarDumperTestTrait::assertDumpMatchesFormat($dump, $data, $filter = 0, $message = '');
+   ```
+
+WebProfilerBundle
+-----------------
+
+ * Removed the `getTemplates()` method of the `TemplateManager` class in favor
+   of the `getNames()` method
 
 Workflow
 --------
@@ -557,6 +648,8 @@ Workflow
 
 Yaml
 ----
+
+ * Support for the `!str` tag was removed, use the `!!str` tag instead.
 
  * Starting an unquoted string with a question mark followed by a space
    throws a `ParseException`.
@@ -685,3 +778,6 @@ Yaml
 
  * The constructor arguments `$offset`, `$totalNumberOfLines` and
    `$skippedLineNumbers` of the `Parser` class were removed.
+
+ * The behavior of the non-specific tag `!` is changed and now forces
+   non-evaluating your values.

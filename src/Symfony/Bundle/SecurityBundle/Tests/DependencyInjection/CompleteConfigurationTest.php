@@ -12,6 +12,7 @@
 namespace Symfony\Bundle\SecurityBundle\Tests\DependencyInjection;
 
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
 use Symfony\Bundle\SecurityBundle\DependencyInjection\SecurityExtension;
@@ -57,10 +58,10 @@ abstract class CompleteConfigurationTest extends TestCase
         $this->assertEquals(array(), array_diff($providers, $expectedProviders));
 
         // chain provider
-        $this->assertEquals(array(array(
+        $this->assertEquals(array(new IteratorArgument(array(
             new Reference('security.user.provider.concrete.service'),
             new Reference('security.user.provider.concrete.basic'),
-        )), $container->getDefinition('security.user.provider.concrete.chain')->getArguments());
+        ))), $container->getDefinition('security.user.provider.concrete.chain')->getArguments());
     }
 
     public function testFirewalls()
@@ -72,7 +73,7 @@ abstract class CompleteConfigurationTest extends TestCase
         foreach (array_keys($arguments[1]->getValues()) as $contextId) {
             $contextDef = $container->getDefinition($contextId);
             $arguments = $contextDef->getArguments();
-            $listeners[] = array_map('strval', $arguments['index_0']);
+            $listeners[] = array_map('strval', $arguments['index_0']->getValues());
 
             $configDef = $container->getDefinition((string) $arguments['index_2']);
             $configs[] = array_values($configDef->getArguments());
@@ -107,6 +108,10 @@ abstract class CompleteConfigurationTest extends TestCase
                     'remember_me',
                     'anonymous',
                 ),
+                array(
+                    'parameter' => '_switch_user',
+                    'role' => 'ROLE_ALLOWED_TO_SWITCH',
+                ),
             ),
             array(
                 'host',
@@ -123,6 +128,7 @@ abstract class CompleteConfigurationTest extends TestCase
                     'http_basic',
                     'anonymous',
                 ),
+                null,
             ),
             array(
                 'with_user_checker',
@@ -139,6 +145,7 @@ abstract class CompleteConfigurationTest extends TestCase
                     'http_basic',
                     'anonymous',
                 ),
+                null,
             ),
         ), $configs);
 

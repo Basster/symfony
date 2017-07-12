@@ -223,7 +223,7 @@ class SecurityExtension extends Extension
         foreach ($providerIds as $userProviderId) {
             $userProviders[] = new Reference($userProviderId);
         }
-        $arguments[1] = $userProviders;
+        $arguments[1] = new IteratorArgument($userProviders);
         $definition->setArguments($arguments);
 
         $customUserChecker = false;
@@ -243,7 +243,7 @@ class SecurityExtension extends Extension
             $contextId = 'security.firewall.map.context.'.$name;
             $context = $container->setDefinition($contextId, new ChildDefinition('security.firewall.context'));
             $context
-                ->replaceArgument(0, $listeners)
+                ->replaceArgument(0, new IteratorArgument($listeners))
                 ->replaceArgument(1, $exceptionListener)
                 ->replaceArgument(2, new Reference($configId))
             ;
@@ -426,6 +426,7 @@ class SecurityExtension extends Extension
         }
 
         $config->replaceArgument(10, $listenerKeys);
+        $config->replaceArgument(11, isset($firewall['switch_user']) ? $firewall['switch_user'] : null);
 
         return array($matcher, $listeners, $exceptionListener);
     }
@@ -590,7 +591,7 @@ class SecurityExtension extends Extension
 
             $container
                 ->setDefinition($name, new ChildDefinition('security.user.provider.chain'))
-                ->addArgument($providers);
+                ->addArgument(new IteratorArgument($providers));
 
             return $name;
         }

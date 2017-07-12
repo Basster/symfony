@@ -429,6 +429,9 @@ class ProcessTest extends TestCase
         $this->assertGreaterThan(0, $process->getExitCode());
     }
 
+    /**
+     * @group tty
+     */
     public function testTTYCommand()
     {
         if ('\\' === DIRECTORY_SEPARATOR) {
@@ -444,6 +447,9 @@ class ProcessTest extends TestCase
         $this->assertSame(Process::STATUS_TERMINATED, $process->getStatus());
     }
 
+    /**
+     * @group tty
+     */
     public function testTTYCommandExitCode()
     {
         if ('\\' === DIRECTORY_SEPARATOR) {
@@ -1425,27 +1431,6 @@ class ProcessTest extends TestCase
         $this->assertEquals($expected, $env);
     }
 
-    /**
-     * @group legacy
-     */
-    public function testInheritEnvDisabled()
-    {
-        $process = $this->getProcessForCode('echo serialize($_SERVER);', null, array('BAR' => 'BAZ'));
-
-        putenv('FOO=BAR');
-
-        $this->assertSame($process, $process->inheritEnvironmentVariables(false));
-        $this->assertFalse($process->areEnvironmentVariablesInherited());
-
-        $process->run();
-
-        $expected = array('BAR' => 'BAZ', 'FOO' => 'BAR');
-        $env = array_intersect_key(unserialize($process->getOutput()), $expected);
-        unset($expected['FOO']);
-
-        $this->assertSame($expected, $env);
-    }
-
     public function testGetCommandLine()
     {
         $p = new Process(array('/usr/bin/php'));
@@ -1460,19 +1445,6 @@ class ProcessTest extends TestCase
     public function testEscapeArgument($arg)
     {
         $p = new Process(array(self::$phpBin, '-r', 'echo $argv[1];', $arg));
-        $p->run();
-
-        $this->assertSame($arg, $p->getOutput());
-    }
-
-    /**
-     * @dataProvider provideEscapeArgument
-     * @group legacy
-     */
-    public function testEscapeArgumentWhenInheritEnvDisabled($arg)
-    {
-        $p = new Process(array(self::$phpBin, '-r', 'echo $argv[1];', $arg), null, array('BAR' => 'BAZ'));
-        $p->inheritEnvironmentVariables(false);
         $p->run();
 
         $this->assertSame($arg, $p->getOutput());

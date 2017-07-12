@@ -98,8 +98,6 @@ class ErrorHandlerTest extends TestCase
     // dummy function to test trace in error handler.
     private static function triggerNotice($that)
     {
-        // dummy variable to check for in error handler.
-        $foobar = 123;
         $that->assertSame('', $foo.$foo.$bar);
     }
 
@@ -221,12 +219,17 @@ class ErrorHandlerTest extends TestCase
 
             $logger = $this->getMockBuilder('Psr\Log\LoggerInterface')->getMock();
 
-            $logArgCheck = function ($level, $message, $context) {
+            $line = null;
+            $logArgCheck = function ($level, $message, $context) use (&$line) {
                 $this->assertEquals('Notice: Undefined variable: undefVar', $message);
                 $this->assertArrayHasKey('exception', $context);
                 $exception = $context['exception'];
                 $this->assertInstanceOf(SilencedErrorContext::class, $exception);
                 $this->assertSame(E_NOTICE, $exception->getSeverity());
+                $this->assertSame(__FILE__, $exception->getFile());
+                $this->assertSame($line, $exception->getLine());
+                $this->assertNotEmpty($exception->getTrace());
+                $this->assertSame(1, $exception->count);
             };
 
             $logger
@@ -239,6 +242,7 @@ class ErrorHandlerTest extends TestCase
             $handler->setDefaultLogger($logger, E_NOTICE);
             $handler->screamAt(E_NOTICE);
             unset($undefVar);
+            $line = __LINE__ + 1;
             @$undefVar++;
 
             restore_error_handler();
@@ -330,35 +334,6 @@ class ErrorHandlerTest extends TestCase
             });
 
             $handler->handleException($exception);
-        } finally {
-            restore_error_handler();
-            restore_exception_handler();
-        }
-    }
-
-    public function testErrorStacking()
-    {
-        try {
-            $handler = ErrorHandler::register();
-            $handler->screamAt(E_USER_WARNING);
-
-            $logger = $this->getMockBuilder('Psr\Log\LoggerInterface')->getMock();
-
-            $logger
-                ->expects($this->exactly(2))
-                ->method('log')
-                ->withConsecutive(
-                    array($this->equalTo(LogLevel::WARNING), $this->equalTo('Dummy log')),
-                    array($this->equalTo(LogLevel::DEBUG), $this->equalTo('User Warning: Silenced warning'))
-                )
-            ;
-
-            $handler->setDefaultLogger($logger, array(E_USER_WARNING => LogLevel::WARNING));
-
-            ErrorHandler::stackErrors();
-            @trigger_error('Silenced warning', E_USER_WARNING);
-            $logger->log(LogLevel::WARNING, 'Dummy log');
-            ErrorHandler::unstackErrors();
         } finally {
             restore_error_handler();
             restore_exception_handler();
